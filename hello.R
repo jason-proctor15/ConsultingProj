@@ -1,1 +1,2 @@
-hello class 
+greeting <- c("hello class") 
+
