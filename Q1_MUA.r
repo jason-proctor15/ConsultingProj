@@ -26,3 +26,28 @@ ggbarstats(
 
 
 # reference : https://statsandr.com/blog/fisher-s-exact-test-in-r-independence-test-for-a-small-sample/
+
+
+#Jason's code
+
+#Simulating how many No mua patients are needed to reject null
+
+
+
+#Loop creating p-values from fisher exact test for n= 1:500
+n = 500
+pvalz = c()
+for (i in 1:n) {
+  x = matrix(c(3, 9, 21, i), ncol = 2)
+  pvalz[i] = fisher.test(x)$p.value
+}
+
+
+#Plot of p-values with critical p=0.05 abline
+plot(c(seq(1, 500, 1)), 
+     pvalz, pch = 16, 
+     main = "Number of MUA free patients required to reject null",
+     xlab = "n", ylab= "P-value")
+abline(h = 0.05, col = "red")
+#n=293 is the first number that passes the critical value
+
