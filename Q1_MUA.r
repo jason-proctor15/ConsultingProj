@@ -82,3 +82,208 @@ ggcorrplot(cor(comorb_2), title = "Correlation matrix of comorbities of patients
 
 
 
+##############
+#Model building
+
+library(readxl)
+MUA_data = read_excel("C:/Users/grfri/Google Drive/Spring 2022/Design/TKAMUA5_IDSET_Nov02.xlsx", sheet = "Final", col_names = TRUE, skip = 2)
+#Changing MUA/C_MUA in to binary 1 or 0
+MUA_data1 = mutate(MUA_data,
+                   MUA_bi= ifelse(MUA == "Yes", 1, 0),
+                   C_MUA_bi = ifelse(C_MUA == "Yes", 1, 0),
+                   MUA_count_T = ifelse(MUA_type == "Both", mua_count +1, mua_count),
+                   age_diff = age_C_TKA - age,
+                   los_total = los+los_C_TKA,
+                   op_time_total = op_time+ op_time_C_TKA,
+                   date_diff =as.Date(`Date of contralateral TKA`) - as.Date(surgery_date) )
+                   
+                   
+MUA_data1 = MUA_data1[1:665,]
+
+###C_MUA is response
+
+#Model with  MUA predictiing C_mua
+mua_glm = glm(C_MUA_bi ~ MUA_bi, data= MUA_data1, family = "binomial")
+summary(mua_glm)
+
+#Odds ratio
+exp(mua_glm$coefficients[-1])
+#Odds of receiving MUA on contralateral knee is almost 13x times larger than not
+
+
+
+#Model with  MUA predictiing C_mua with time
+mua_glm1 = glm(C_MUA_bi ~ MUA_bi +date_diff + MUA_bi*date_diff + sex +age, data= MUA_data1, family = "binomial")
+summary(mua_glm1)
+
+
+
+
+
+### List dont use
+blood_transfusion+
+  platelet_transfusion+
+  AIDS +
+  Malignancy +
+  Cerebrovascular +
+  COPD +
+  CHF +
+  Dementia +
+  Diabetes_cc +
+  Diabetes_no_cc +
+  Hemiplegia +
+  Metastatic +
+  Mild_Liver +
+  Moderate_Liver +
+  MI +
+  Peptic_Ulcer +
+  PVD +
+  CKD +
+  Rheumatic +
+  hematoma +
+  wound_infection +
+  knee_infection +
+  `Readmission within 90 days (1=yes)`
+race
+los+
+library(pscl)
+#######
+
+
+### Total MUA count is response
+
+#Zero inflated model
+mua_t_glm = zeroinfl(MUA_count_T ~ sex + age+
+                  
+                  
+                  #tobacco+
+                  op_time_total+
+                    los_total
+                  #BMI 
+                    
+                  #'Readmission within 90 days (1=yes)'
+                    
+                   , data = MUA_data1, dist= "negbin")
+summary(mua_t_glm)
+
+
+#Lasso model
+library(glmnet)
+library(fastDummies)
+#Creating dummy matrix for lasso
+#X matrix
+x1matrix = data.matrix(MUA_data1[,c(20,23:45)])
+x2matrix = dummy_cols(MUA_data1[,c(6:9,11)])
+x22matrix = x2matrix[,-c(1:5)]
+xmatrix= cbind(x22matrix,x1matrix)
+xmatrix= data.matrix(xmatrix)
+#Y matrix
+y_muacount_t = as.matrix((MUA_data1$MUA_count_T))
+
+
+#Finding lambda
+cv.out= cv.glmnet(xmatrix, y_muacount_t, alpha=1, nfolds=600)
+bestlam = cv.out$lambda.min
+grid <- 10^ seq (10, -2, length = 100)
+
+lasso.mod = glmnet(xmatrix, y_muacount_t, alpha=1, lambda=bestlam)
+lasso.mod$beta
+
+
+#Model with MUA count
+library(pls)
+MUA_count_data = MUA_data1[,22:44]
+mua_count = pcr(mua_count ~ ., data= MUA_count_data)
+summary(mua_count)
+
+mua_count1 = glm(MUA_count ~., data = mua_count_reduced)
+summary(mua_count1)
+validationplot(mua_count)
+
+
+MUA_data1[,24:44]
+
+MUA_data1[,44]
+
+
+
+
+
+#### Binomial models with just probability of MUA (no MUA/C_MUA distinction)
+#Imputing MUA/C_MUA data as vectors
+y= c(MUA_data1$MUA_bi, MUA_data1$C_MUA_bi)
+los = c(MUA_data1$los, MUA_data1$los_C_TKA)
+sex = rep(MUA_data1$sex, 2)
+op_time = c(MUA_data1$op_time, MUA_data1$op_time_C_TKA)
+tobacco = c(MUA_data1$tobacco, MUA_data1$tobacco_C_TKA)
+ethnicity = rep(MUA_data1$ethnicity, 2)
+BMI = c(MUA_data1$BMI, MUA_data1$bmi_C_TKA)
+age = c(MUA_data1$age, MUA_data1$age_C_TKA)
+ASA = c(MUA_data1$ASA, MUA_data1$ASA_C_TKA)
+ID = rep(MUA_data1$ID,2)
+
+
+
+#Standard Glm binomial
+M_glm = glm(y~ los +
+              sex+
+              op_time+
+              tobacco+
+              ethnicity+
+              BMI+
+              age, family = "binomial")
+
+
+summary(M_glm)
+
+
+
+#Generalized Estimating Equation
+library(gee)
+M_glm2 = gee(y~ los +
+              sex+
+              op_time+
+              ethnicity+
+              BMI+
+              age, id = ID, family = "binomial", corstr ="independence")
+
+
+summary(M_glm2)
+library(geepack)
+mf=formula(y~ los +
+  sex+
+  op_time+
+  ethnicity+
+  BMI+
+  age)
+M_glm4 = geeglm(y~ los +
+                  sex+
+                  op_time+
+                  ethnicity+
+                  BMI+
+                  age, id = ID, family = "binomial", corstr ="ind")
+summary(M_glm4)
+
+
+
+
+#Random effects
+library(lme4)
+M_glm3 = glmer(y~ los +
+               sex+
+               op_time+
+                 #ethnicity+
+                 as.factor(ASA)+
+               
+               BMI+
+               age + (1|ID), family = "binomial")
+
+
+summary(M_glm3)
+
+
+
+
+
+
+
