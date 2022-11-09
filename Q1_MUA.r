@@ -86,8 +86,10 @@ ggcorrplot(cor(comorb_2), title = "Correlation matrix of comorbities of patients
 #Model building
 
 library(readxl)
+libary(tidyverse)
 MUA_data = read_excel("C:/Users/grfri/Google Drive/Spring 2022/Design/TKAMUA5_IDSET_Nov02.xlsx", sheet = "Final", col_names = TRUE, skip = 2)
-#Changing MUA/C_MUA in to binary 1 or 0
+
+
 MUA_data1 = mutate(MUA_data,
                    MUA_bi= ifelse(MUA == "Yes", 1, 0),
                    C_MUA_bi = ifelse(C_MUA == "Yes", 1, 0),
@@ -99,9 +101,16 @@ MUA_data1 = mutate(MUA_data,
                    ASA_H = ifelse(ASA == "4" | ASA == "4E", 1,0),
                    ASA_H_C = ifelse(ASA_C_TKA == "4" | ASA_C_TKA == "4E", 1,0)
                    )
-                   
-                   
+
+MUA_data1$financial_class <- 
+  ifelse(MUA_data1$financial_class %in% c("Blue Cross Commercial","Commercial LUHS","Insurance","Worker's Comp","Worker's Comp LUHS"), "Private",
+         ifelse(MUA_data1$financial_class %in% c("Medicare","Medicare LUHS","Managed Medicare"),"Medicare",
+                ifelse(MUA_data1$financial_class%in% c("Managed Medicaid","Medicaid","MMAI"),"Medicaid","Uninsured")))                  
 MUA_data1 = MUA_data1[1:665,]
+MUA_data1$Fac_age_C_TKA <- ifelse(MUA_data1$age_C_TKA<50,"less50",
+                                  ifelse(MUA_data1$age_C_TKA<60, "50s",
+                                         ifelse(MUA_data1$age_C_TKA<70, "60s","over70s")))
+
 
 ###C_MUA is response
 
@@ -114,16 +123,23 @@ exp(mua_glm$coefficients[-1])
 #Odds of receiving MUA on contralateral knee is almost 13x times larger than not
 
 
+MUA_data1$Fac_age_C_TKA <- ifelse(MUA_data1$age_C_TKA<50,"less50",
+                                  ifelse(MUA_data1$age_C_TKA<60, "50s",
+                                         ifelse(MUA_data1$age_C_TKA<70, "60s","over70s")))
+
+
 
 #Model with  MUA predictiing C_mua with time
-mua_glm1 = glm(C_MUA_bi ~ MUA_bi +date_diff + MUA_bi*date_diff + sex +age, data= MUA_data1, family = "binomial")
+mua_glm1 = glm(C_MUA_bi ~ MUA_bi+ date_diff, data= MUA_data1, family = "binomial")
 summary(mua_glm1)
 
 
+mua_glm2 = glm(C_MUA_bi ~ MUA_bi+ Fac_age_C_TKA+ as.factor(ASA_H_C) + Fac_age_C_TKA*as.factor(ASA_H_C), data= MUA_data1, family = "binomial")
+summary(mua_glm2)
 
 
 
-### List dont use
+#Dont use this code
 blood_transfusion+
   platelet_transfusion+
   AIDS +
@@ -148,21 +164,20 @@ blood_transfusion+
   knee_infection +
   `Readmission within 90 days (1=yes)`
 race
-los+
+#los+
 library(pscl)
-#######
+
 
 
 ### Total MUA count is response
 
 #Zero inflated model
-mua_t_glm = zeroinfl(MUA_count_T ~ sex + age+
+mua_t_glm = zeroinfl(MUA_count_t ~ sex+ age+
                   
                   
-                  #tobacco+
-                  op_time_total+
+                  
+                  
                     los_total
-                  #BMI 
                     
                   #'Readmission within 90 days (1=yes)'
                     
@@ -170,43 +185,20 @@ mua_t_glm = zeroinfl(MUA_count_T ~ sex + age+
 summary(mua_t_glm)
 
 
-#Lasso model
-library(glmnet)
-library(fastDummies)
-#Creating dummy matrix for lasso
-#X matrix
-x1matrix = data.matrix(MUA_data1[,c(20,23:45)])
-x2matrix = dummy_cols(MUA_data1[,c(6:9,11)])
-x22matrix = x2matrix[,-c(1:5)]
-xmatrix= cbind(x22matrix,x1matrix)
-xmatrix= data.matrix(xmatrix)
-#Y matrix
-y_muacount_t = as.matrix((MUA_data1$MUA_count_T))
-
-
-#Finding lambda
-cv.out= cv.glmnet(xmatrix, y_muacount_t, alpha=1, nfolds=600)
-bestlam = cv.out$lambda.min
-grid <- 10^ seq (10, -2, length = 100)
-
-lasso.mod = glmnet(xmatrix, y_muacount_t, alpha=1, lambda=bestlam)
-lasso.mod$beta
-
-
-#Model with MUA count
-library(pls)
-MUA_count_data = MUA_data1[,22:44]
-mua_count = pcr(mua_count ~ ., data= MUA_count_data)
-summary(mua_count)
-
-mua_count1 = glm(MUA_count ~., data = mua_count_reduced)
-summary(mua_count1)
-validationplot(mua_count)
-
-
-MUA_data1[,24:44]
-
-MUA_data1[,44]
+#Standared model
+mua_t_glm1 = glm(MUA_count_t ~ sex + age+
+                       
+                       
+                       #tobacco+
+                       
+                       los_total+ los_total*sex + los_total*age
+                   
+                     
+                     
+                     #'Readmission within 90 days (1=yes)'
+                     
+                     , data = MUA_data1)
+summary(mua_t_glm1)
 
 
 
@@ -230,10 +222,11 @@ ID = rep(MUA_data1$ID,2)
 #Standard Glm binomial
 M_glm = glm(y~ los +
               sex+
-              op_time+
-              tobacco+
-              ethnicity+
+              
+              
+              
               BMI+
+      BMI*sex+ age*sex+ + los*sex+ los*age+
               age, family = "binomial")
 
 
@@ -246,12 +239,13 @@ library(gee)
 M_glm2 = gee(y~ los +
               sex+
               op_time+
-              ethnicity+
+              
               BMI+
-              age, id = ID, family = "binomial", corstr ="independence")
+              age , id = ID, family = "binomial", corstr ="exchangeable")
 
 
 summary(M_glm2)
+anova(M_glm2)
 library(geepack)
 mf=formula(y~ los +
   sex+
@@ -283,6 +277,13 @@ M_glm3 = glmer(y~ los +
 
 
 summary(M_glm3)
+
+
+
+
+
+
+
 
 
 
