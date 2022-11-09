@@ -91,11 +91,14 @@ MUA_data = read_excel("C:/Users/grfri/Google Drive/Spring 2022/Design/TKAMUA5_ID
 MUA_data1 = mutate(MUA_data,
                    MUA_bi= ifelse(MUA == "Yes", 1, 0),
                    C_MUA_bi = ifelse(C_MUA == "Yes", 1, 0),
-                   MUA_count_T = ifelse(MUA_type == "Both", mua_count +1, mua_count),
+                   MUA_count_t = MUA_bi + C_MUA_bi,
                    age_diff = age_C_TKA - age,
                    los_total = los+los_C_TKA,
                    op_time_total = op_time+ op_time_C_TKA,
-                   date_diff =as.Date(`Date of contralateral TKA`) - as.Date(surgery_date) )
+                   date_diff =as.Date(`Date of contralateral TKA`) - as.Date(surgery_date),
+                   ASA_H = ifelse(ASA == "4" | ASA == "4E", 1,0),
+                   ASA_H_C = ifelse(ASA_C_TKA == "4" | ASA_C_TKA == "4E", 1,0)
+                   )
                    
                    
 MUA_data1 = MUA_data1[1:665,]
