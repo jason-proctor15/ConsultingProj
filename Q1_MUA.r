@@ -214,6 +214,10 @@ tobacco = c(MUA_data1$tobacco, MUA_data1$tobacco_C_TKA)
 ethnicity = rep(MUA_data1$ethnicity, 2)
 BMI = c(MUA_data1$BMI, MUA_data1$bmi_C_TKA)
 age = c(MUA_data1$age, MUA_data1$age_C_TKA)
+Fac_age_TKA <- ifelse(age<50,"less50",
+                                  ifelse(age<60, "50s",
+                                         ifelse(age<70, "60s","over70s")))
+levels(Fac_age_TKA) = c("less50", "50s", "60s", "over70s")
 ASA = c(MUA_data1$ASA, MUA_data1$ASA_C_TKA)
 ID = rep(MUA_data1$ID,2)
 
