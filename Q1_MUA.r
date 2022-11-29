@@ -287,7 +287,103 @@ summary(M_glm3)
 
 
 
+##############
+#Additional Q3 models
+#1 lasso model with all relavant factors (not just comorbities)
+#2 multinomial models
 
+
+
+#Please rerun data cleaning for insurance with code below 
+#Give Workers comp its own category. 
+#It is different than private and is only used when a worker is hurt on the job
+names(MUA_data1)[77] <- c("Insurance_C_TKA")
+MUA_data1$Insurance_C_TKA <- 
+  ifelse(MUA_data1$Insurance_C_TKA %in% c("Blue Cross Commercial","Commercial LUHS","Insurance"), "Private",
+         ifelse(MUA_data1$Insurance_C_TKA %in% c("Medicare","Medicare LUHS","Managed Medicare"),"Medicare",
+                ifelse(MUA_data1$Insurance_C_TKA %in% c("Worker's Comp","Worker's Comp LUHS"), "Work_Comp",
+                       ifelse(MUA_data1$Insurance_C_TKA %in% c("Managed Medicaid","Medicaid","MMAI"),"Medicaid","Uninsured"))))
+
+
+
+
+####Lasso models with relevant variables
+#Variables include MUA_bi, Age, sex, ethnicity, BMI, tobacco, financial class (reduced), 
+#los, ASA, OP time, comorbities, readmit_90, and redu_race
+library(glmnet)
+y = MUA_data1$C_MUA_bi
+MUA_data2 = MUA_data1[,c(108, 6, 9,74:78, 80:104, 119)] #Your exact columns may be different
+d <- data.frame(x=MUA_data2, y=y)
+
+options(na.action="na.pass")
+m <- model.matrix(y ~ ., data=d)
+
+set.seed(1234)
+cv.out = cv.glmnet(m, y, alpha =1)
+plot(cv.out)
+bestlam = cv.out$lambda.min
+bestlam
+
+
+lasso.mod = glmnet(m, y, alpha= 1, lambda = bestlam)
+
+
+coef(lasso.mod)
+
+#nonzero coefficients for the variables are:
+#MUA_bi,
+#Workers_comp (Insurance)
+#Blood transfusion
+#Readmit_90d_C_TKA
+
+
+
+
+## Multinomial models:
+library(VGAM)
+
+
+#Multinomial model with Both, C_MUA, MUA, No MUA:
+#Removed most comorbities except blood transfusion and readmit_90
+#Model was not converging otherwise
+M_MUA_set = MUA_data1[,c( 6, 9,74:78, 82, 104, 119)] #80:104
+M_set = cbind(MUA_data1$MUA_type, M_MUA_set)
+M_set = data.frame(M_set)
+M_set = M_set[complete.cases(M_set),]
+M_set$MUA_data1.MUA_type = as.factor(M_set$MUA_data1.MUA_type)
+levels(M_set$MUA_data1.MUA_type) = c("No_MUA", "MUA", "C_MUA", "Both")
+
+fit_multi1 =vglm(MUA_data1.MUA_type ~ ., family = multinomial, data = M_set)
+
+
+summary(fit_multi1)
+#Has trouble converging. Blood transfusion still appears to be significant
+#Non Hispanic origin significant for "Both"
+
+
+
+
+
+
+#Multinomial model with y response as: "Both" ,"One Knee", "None"
+
+#Removed most comorbities except blood transfusion and readmit_90
+#Model was not converging otherwise
+M_set2 = MUA_data1[,c( 6, 9,74:78, 82, 104, 119)]
+M_set2 = mutate(M_set,
+                MUA_num = ifelse(MUA_data1.MUA_type == "Both", "Both_knees",
+                ifelse(MUA_data1.MUA_type == "C_MUA" , "One_knee",
+                       ifelse(MUA_data1.MUA_type == "MUA", "One_knee", "None"))),
+                MUA_num = as.factor(MUA_num),
+                )
+
+levels(M_set2$MUA_num) = c("None", "One_knee", "Both_knees")
+
+fit_multi2 =vglm(MUA_num ~ . -MUA_data1.MUA_type, family = multinomial, data = M_set2)
+
+
+summary(fit_multi2)
+#Non hispanic origin and blood transfusion significant for "Both"
 
 
 
