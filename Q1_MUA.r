@@ -386,8 +386,31 @@ summary(fit_multi2)
 #Non hispanic origin and blood transfusion significant for "Both"
 
 
+##### ROC
+#lasso.mod = lasso mod using bestlam from cv.glmnet
+#m = original model matrix
+predict = predict(lasso.mod, m, type = "response")
+
+library(pROC)
+roc_score=roc(y, as.numeric(predict)) 
+
+#ROC Plot
+plot(roc_score ,main ="ROC curve -- Lasso Regression ") 
+
+roc_score$auc #AUC score
 
 
+
+##### Bootstrapping AUC to find 95% CI
+#Finding Bootstrapped AUC confidence intervals
+library(fbroc)
+boot_roc = boot.roc(as.numeric(predict), as.logical(y), n.boot = 10000)
+plot(boot_roc)
+
+
+w=perf(boot_roc, "auc") #Measuring performance
+w #AUC confidence interval
+hist(w$boot.results, main = "Bootstrapped AUC Values", xlab = "Area Under Curve") #Histogram of bootstrapped AUC
 
 
 
