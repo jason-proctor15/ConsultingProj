@@ -1,3 +1,60 @@
+#Reading in data
+MUA_data = read_excel("C:/Users/grfri/Google Drive/Spring 2022/Design/TKAMUA5_IDSET_Nov02.xlsx", sheet = "Final", col_names = TRUE, skip = 2)
+
+#Changing MUA/C_MUA in to binary 1 or 0
+MUA_data1 = mutate(MUA_data,
+                   MUA_bi= ifelse(MUA == "Yes", 1, 0),
+                   C_MUA_bi = ifelse(C_MUA == "Yes", 1, 0),
+                   MUA_count_T = ifelse(MUA_type == "Both", mua_count +1, mua_count),
+                   age_diff = age_C_TKA - age,
+                   los_total = los+los_C_TKA,
+                   op_time_total = op_time+ op_time_C_TKA,
+                   date_diff =as.Date(`Date of contralateral TKA`) - as.Date(surgery_date) )
+MUA_data1$date_diff <- ifelse(MUA_data1$date_diff <0, -MUA_data1$date_diff,MUA_data1$date_diff)
+MUA_data1 = MUA_data1[1:665,]
+MUA_data1$C_MUA<- as.factor(MUA_data1$C_MUA)
+MUA_data1$MUA<- as.factor(MUA_data1$MUA)
+MUA_data1$BTKA <- ifelse(MUA_data1$date_diff==0, "Yes","No")   
+# age
+MUA_data1$Fac_age_C_TKA <- ifelse(MUA_data1$age_C_TKA<50,"less50",
+                                  ifelse(MUA_data1$age_C_TKA<60, "50s",
+                                         ifelse(MUA_data1$age_C_TKA<70,"60s","over70s")))
+MUA_data1$Fac_age_TKA <- ifelse(MUA_data1$age<50,"less50",
+                                ifelse(MUA_data1$age<60, "50s",
+                                       ifelse(MUA_data1$age<70, "60s","over70s")))
+# race 
+MUA_data1$redu_race <- ifelse(MUA_data1$race %in% c("Hispanic","Multiracial","Other","Preference not indicated","American Indian","Asian"), "Other",MUA_data1$race)
+#ethnicity
+MUA_data1$ethnicity <- ifelse(MUA_data1$ethnicity %in% c("Prefers not to answer"), "Non-Hispanic Origin",MUA_data1$ethnicity)
+#Insurance
+names(MUA_data1)[13] <- c("Insurance")
+MUA_data1$Insurance <- 
+  ifelse(MUA_data1$Insurance %in% c("Blue Cross Commercial","Commercial LUHS","Insurance","Worker's Comp","Worker's Comp LUHS"), "Private",
+         ifelse(MUA_data1$Insurance %in% c("Medicare","Medicare LUHS","Managed Medicare"),"Medicare",
+                ifelse(MUA_data1$Insurance %in% c("Managed Medicaid","Medicaid","MMAI"),"Medicaid","Uninsured")))
+names(MUA_data1)[77] <- c("Insurance_C_TKA")
+MUA_data1$Insurance_C_TKA <- 
+  ifelse(MUA_data1$Insurance_C_TKA %in% c("Blue Cross Commercial","Commercial LUHS","Insurance"), "Private",
+         ifelse(MUA_data1$Insurance_C_TKA %in% c("Medicare","Medicare LUHS","Managed Medicare"),"Medicare",
+                ifelse(MUA_data1$Insurance_C_TKA %in% c("Worker's Comp","Worker's Comp LUHS"), "Work_Comp",
+                       ifelse(MUA_data1$Insurance_C_TKA %in% c("Managed Medicaid","Medicaid","MMAI"),"Medicaid","Uninsured"))))
+### tobacco
+MUA_data1$tobacco_C_TKA<- ifelse(is.na(MUA_data1$tobacco_C_TKA)==TRUE, MUA_data1$tobacco,MUA_data1$tobacco_C_TKA) 
+MUA_data1$redu_tobacco <- ifelse(MUA_data1$tobacco %in% c("Passive","Yes"), "Yes","No")
+MUA_data1$redu_tobacco_C_TKA <- ifelse(MUA_data1$tobacco_C_TKA %in% c("Passive","Yes"), "Yes","No")
+### ASA
+# missing value 
+MUA_data1$ASA<- ifelse(is.na(MUA_data1$ASA)==TRUE, MUA_data1$ASA_C_TKA,MUA_data1$ASA) 
+MUA_data1$redu_ASA_C_TKA <- ifelse(MUA_data1$ASA_C_TKA %in% c(2,3),"2/3","else")
+MUA_data1$redu_ASA <- ifelse(MUA_data1$ASA %in% c(2,3),"2/3","else")
+###los
+MUA_data1$los_C_TKA<- ifelse(is.na(MUA_data1$los_C_TKA)==TRUE, MUA_data1$los,MUA_data1$los_C_TKA) 
+
+
+
+
+
+
 Q1_data <- read_excel("DeID2.xlsx", sheet = "Q1", skip = 1)
 
 #Pearson's Chi-squared test
@@ -294,50 +351,6 @@ summary(M_glm3)
 
 
 
-#Please rerun data cleaning for insurance with code below 
-#Give Workers comp its own category. 
-#It is different than private and is only used when a worker is hurt on the job
-names(MUA_data1)[77] <- c("Insurance_C_TKA")
-MUA_data1$Insurance_C_TKA <- 
-  ifelse(MUA_data1$Insurance_C_TKA %in% c("Blue Cross Commercial","Commercial LUHS","Insurance"), "Private",
-         ifelse(MUA_data1$Insurance_C_TKA %in% c("Medicare","Medicare LUHS","Managed Medicare"),"Medicare",
-                ifelse(MUA_data1$Insurance_C_TKA %in% c("Worker's Comp","Worker's Comp LUHS"), "Work_Comp",
-                       ifelse(MUA_data1$Insurance_C_TKA %in% c("Managed Medicaid","Medicaid","MMAI"),"Medicaid","Uninsured"))))
-
-
-
-
-####Lasso models with relevant variables
-#Variables include MUA_bi, Age, sex, ethnicity, BMI, tobacco, financial class (reduced), 
-#los, ASA, OP time, comorbities, readmit_90, and redu_race
-library(glmnet)
-y = MUA_data1$C_MUA_bi
-MUA_data2 = MUA_data1[,c(108, 6, 9,74:78, 80:104, 119)] #Your exact columns may be different
-d <- data.frame(x=MUA_data2, y=y)
-
-options(na.action="na.pass")
-m <- model.matrix(y ~ ., data=d)
-
-set.seed(1234)
-cv.out = cv.glmnet(m, y, alpha =1)
-plot(cv.out)
-bestlam = cv.out$lambda.min
-bestlam
-
-
-lasso.mod = glmnet(m, y, alpha= 1, lambda = bestlam)
-
-
-coef(lasso.mod)
-
-#nonzero coefficients for the variables are:
-#MUA_bi,
-#Workers_comp (Insurance)
-#Blood transfusion
-#Readmit_90d_C_TKA
-
-
-
 
 ## Multinomial models:
 library(VGAM)
@@ -384,6 +397,37 @@ fit_multi2 =vglm(MUA_num ~ . -MUA_data1.MUA_type, family = multinomial, data = M
 
 summary(fit_multi2)
 #Non hispanic origin and blood transfusion significant for "Both"
+
+
+
+####Lasso models with relevant variables
+#Variables include MUA_bi, Age, sex, ethnicity, BMI, tobacco, financial class (reduced), 
+#los, ASA, OP time, comorbities, readmit_90, and redu_race
+library(glmnet)
+y = MUA_data1$C_MUA_bi
+MUA_data2 = MUA_data1[,c(108, 6, 9,74:78, 80:104, 119)] #Your exact columns may be different
+d <- data.frame(x=MUA_data2, y=y)
+
+options(na.action="na.pass")
+m <- model.matrix(y ~ ., data=d)
+
+set.seed(1234)
+cv.out = cv.glmnet(m, y, alpha =1)
+plot(cv.out)
+bestlam = cv.out$lambda.min
+bestlam
+
+
+lasso.mod = glmnet(m, y, alpha= 1, lambda = bestlam)
+
+
+coef(lasso.mod)
+
+#nonzero coefficients for the variables are:
+#MUA_bi,
+#Workers_comp (Insurance)
+#Blood transfusion
+#Readmit_90d_C_TKA
 
 
 ##### ROC
